@@ -36,10 +36,70 @@ const LiveMatch = () => {
 
   // Add a comment to the commentary
   const addCommentary = (message) => {
-    setCommentary(prev => [
-      { id: Date.now(), message, timestamp: new Date().toLocaleTimeString() },
-      ...prev
-    ].slice(0, 10)); // Keep only last 10 comments
+    console.log(`[Commentary] ${message}`);
+    const newComment = { 
+      id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      message, 
+      timestamp: new Date().toLocaleTimeString() 
+    };
+    setCommentary(prev => [newComment, ...prev].slice(0, 10)); // Keep only last 10 comments
+  };
+  
+  // Log detailed match state for debugging
+  const logMatchState = (context = '') => {
+    console.group(`📊 Match State - ${context} (Over ${currentOver}.${currentBall})`);
+    
+    // Match score
+    console.log('🏏 Score:', `${score.runs}/${score.wickets} in ${currentOver}.${currentBall} overs`);
+    console.log('🎯 Target:', target || 'N/A');
+    console.log('📈 Run Rate:', currentRR());
+    if (target) console.log('🎯 Required Run Rate:', calculateRR());
+    
+    // Batsmen stats
+    console.group('🧑‍🏏 Batsmen:');
+    console.log(`Striker: ${striker} - ${playerStats[striker]?.runs || 0}* (${playerStats[striker]?.balls || 0})`);
+    console.log(`Non-Striker: ${nonStriker} - ${playerStats[nonStriker]?.runs || 0} (${playerStats[nonStriker]?.balls || 0})`);
+    
+    // Calculate and log striker's strike rate
+    const strikerSR = playerStats[striker]?.balls > 0 
+      ? ((playerStats[striker]?.runs || 0) / playerStats[striker]?.balls * 100).toFixed(2)
+      : '0.00';
+    console.log(`Striker's Strike Rate: ${strikerSR}%`);
+    
+    // Log fours and sixes for current batsmen
+    console.log(`Fours: ${playerStats[striker]?.fours || 0}, Sixes: ${playerStats[striker]?.sixes || 0}`);
+    console.groupEnd();
+    
+    // Bowler stats
+    console.group('🎯 Bowler:');
+    console.log(`${bowler} - ${bowlerStats[bowler]?.overs || 0}.${(bowlerStats[bowler]?.balls || 0) % 6} - ${bowlerStats[bowler]?.runs || 0}/${bowlerStats[bowler]?.wickets || 0}`);
+    const bowlerEcon = bowlerStats[bowler]?.overs > 0 
+      ? (bowlerStats[bowler]?.runs / bowlerStats[bowler]?.overs).toFixed(2)
+      : '0.00';
+    console.log(`Economy: ${bowlerEcon}, Maidens: ${bowlerStats[bowler]?.maidens || 0}`);
+    console.groupEnd();
+    
+    // Match status
+    console.log('🏟️ Match Status:', isMatchComplete ? 'Completed' : isMatchStarted ? 'In Progress' : 'Not Started');
+    console.log('Innings:', isSecondInnings ? '2nd Innings' : '1st Innings');
+    
+    // Top performers
+    const { batsmen: topBatsmen, bowlers: topBowlers } = getTopPerformers();
+    console.group('🏆 Top Performers');
+    console.group('Top Batsmen:');
+    topBatsmen.forEach((b, i) => 
+      console.log(`${i + 1}. ${b.name}: ${b.runs} (${b.balls}) SR: ${b.sr}%`)
+    );
+    console.groupEnd();
+    
+    console.group('Top Bowlers:');
+    topBowlers.forEach((b, i) => 
+      console.log(`${i + 1}. ${b.name}: ${b.wickets}/${b.runs} (${b.overs}.${b.balls % 6})`)
+    );
+    console.groupEnd();
+    console.groupEnd(); // End Top Performers
+    
+    console.groupEnd(); // End Match State
   };
 
   // Start the match
@@ -100,11 +160,16 @@ const LiveMatch = () => {
     addCommentary(`Match started! ${matchDetails[battingTeam]?.name || 'Team'} are batting first.`);
     addCommentary(`${newStriker} and ${newNonStriker} are opening the batting.`);
     addCommentary(`${newBowler} to bowl the first over.`);
+    
+    // Log initial match state
+    logMatchState('Match Started');
   };
 
   // Add runs to the score
   const addRun = (runs) => {
     if (isMatchComplete || !matchDetails) return;
+    
+    console.group(` Adding ${runs} run(s) to score`);
     
     // Update team score
     setScore(prev => ({
@@ -113,23 +178,39 @@ const LiveMatch = () => {
       balls: prev.balls + 1
     }));
     
-    // Update batsman stats
-    setPlayerStats(prev => ({
-      ...prev,
-      [striker]: {
-        ...(prev[striker] || {}),
-        runs: (prev[striker]?.runs || 0) + runs,
-        balls: (prev[striker]?.balls || 0) + 1,
-        fours: runs === 4 ? (prev[striker]?.fours || 0) + 1 : (prev[striker]?.fours || 0),
-        sixes: runs === 6 ? (prev[striker]?.sixes || 0) + 1 : (prev[striker]?.sixes || 0)
-      }
-    }));
+    // Update batsman stats - only for the striker
+    setPlayerStats(prev => {
+      const updatedStats = { ...prev };
+      
+      // Only update the striker's stats
+      updatedStats[striker] = {
+        ...(updatedStats[striker] || {
+          runs: 0,
+          balls: 0,
+          fours: 0,
+          sixes: 0,
+          out: false
+        }),
+        runs: (updatedStats[striker]?.runs || 0) + runs,
+        balls: (updatedStats[striker]?.balls || 0) + 1,
+        fours: runs === 4 ? (updatedStats[striker]?.fours || 0) + 1 : (updatedStats[striker]?.fours || 0),
+        sixes: runs === 6 ? (updatedStats[striker]?.sixes || 0) + 1 : (updatedStats[striker]?.sixes || 0)
+      };
+      
+      return updatedStats;
+    });
     
     // Update bowler stats
     setBowlerStats(prev => ({
       ...prev,
       [bowler]: {
-        ...(prev[bowler] || {}),
+        ...(prev[bowler] || {
+          runs: 0,
+          balls: 0,
+          wickets: 0,
+          maidens: 0,
+          overs: 0
+        }),
         runs: (prev[bowler]?.runs || 0) + runs,
         balls: (prev[bowler]?.balls || 0) + 1
       }
@@ -139,12 +220,16 @@ const LiveMatch = () => {
     const runText = runs === 0 ? 'Dot ball' : `${runs} run${runs > 1 ? 's' : ''}`;
     addCommentary(`${bowler} to ${striker}, ${runText}.`);
     
-    // Switch strike for odd runs (except last ball of over)
-    if (runs % 2 !== 0 && currentBall < 5) {
-      const temp = striker;
-      setStriker(nonStriker);
-      setNonStriker(temp);
-      addCommentary(`${striker} takes a single, strike rotates.`);
+    // Handle strike rotation
+    const shouldRotateStrike = (runs % 2 === 1) || (runs === 3);
+    
+    // Only rotate strike if it's not the last ball of the over and runs are odd or 3
+    if (shouldRotateStrike && currentBall < 5) {
+      setStriker(prevStriker => {
+        setNonStriker(prevStriker);
+        addCommentary(`${prevStriker} takes a single, strike rotates.`);
+        return nonStriker;
+      });
     } else if (runs === 4) {
       addCommentary('FOUR! Great shot!');
     } else if (runs === 6) {
@@ -152,10 +237,15 @@ const LiveMatch = () => {
     }
     
     nextBall();
+    
+    // Log updated state after adding runs
+    logMatchState(`Added ${runs} run(s)`);
+    console.groupEnd();
   };
 
   // Add a wicket
   const addWicket = () => {
+    console.group(' Wicket!');
     if (isMatchComplete || !matchDetails || score.wickets >= parseInt(matchDetails.playersPerTeam) - 1) return;
     
     // Update team score
@@ -214,18 +304,39 @@ const LiveMatch = () => {
   const nextBall = () => {
     if (isMatchComplete || !matchDetails) return;
     
+    console.group('⏭️ Next Ball');
+    
     setCurrentBall(prev => {
       const newBall = prev + 1;
+      const totalWickets = score.wickets;
+      const maxWickets = parseInt(matchDetails.playersPerTeam) - 1;
       
-      // Check if match is over (all out or overs completed)
-      if (score.wickets >= parseInt(matchDetails.playersPerTeam) - 1) {
+      // Check if all wickets have fallen
+      if (totalWickets >= maxWickets) {
         console.log('🏁 [LiveMatch] All out!');
         endInnings();
+        console.groupEnd();
         return prev;
       }
       
+      // Handle end of over
       if (newBall >= 6) {
-        // End of over
+        // Update bowler's stats
+        setBowlerStats(prev => {
+          const currentBowlerStats = prev[bowler] || { runs: 0, balls: 0, wickets: 0, maidens: 0, overs: 0 };
+          const isMaiden = currentBowlerStats.runs === 0;
+          
+          return {
+            ...prev,
+            [bowler]: {
+              ...currentBowlerStats,
+              overs: Math.floor((currentBowlerStats.balls + 1) / 6),
+              maidens: isMaiden ? (currentBowlerStats.maidens || 0) + 1 : (currentBowlerStats.maidens || 0)
+            }
+          };
+        });
+        
+        // Update over count
         setCurrentOver(prevOver => {
           const newOver = prevOver + 1;
           
@@ -233,20 +344,11 @@ const LiveMatch = () => {
           if (newOver >= parseInt(matchDetails.overs)) {
             console.log('🏁 [LiveMatch] All overs completed!');
             endInnings();
+            console.groupEnd();
             return prevOver;
           }
           
-          // Update bowler's overs
-          setBowlerStats(prev => ({
-            ...prev,
-            [bowler]: {
-              ...(prev[bowler] || {}),
-              overs: Math.floor(((prev[bowler]?.balls || 0) + 1) / 6),
-              maidens: (prev[bowler]?.maidens || 0) + (prev[bowler]?.runs === 0 ? 1 : 0)
-            }
-          }));
-          
-          // Get next bowler (simple rotation for now)
+          // Get next bowler (simple rotation)
           const bowlingTeam = matchDetails.toss.choice === 'bowl' 
             ? 'team' + matchDetails.toss.winner 
             : 'team' + (matchDetails.toss.winner === 'A' ? 'B' : 'A');
@@ -255,25 +357,27 @@ const LiveMatch = () => {
           const nextBowlerIndex = (currentBowlerIndex + 1) % (matchDetails[bowlingTeam]?.players?.length || 1);
           const nextBowler = matchDetails[bowlingTeam]?.players?.[nextBowlerIndex] || 'Bowler';
           
+          // Update bowler for the new over
           setBowler(nextBowler);
           addCommentary(`End of over ${newOver}. ${nextBowler} comes into the attack.`);
+          
+          // Switch striker and non-striker at the end of the over
+          setStriker(prevStriker => {
+            setNonStriker(prevStriker);
+            addCommentary('Batsmen cross for the new over.');
+            return nonStriker;
+          });
           
           console.log(`🔄 [LiveMatch] Over ${newOver}.0 started`);
           return newOver;
         });
         
-        // Switch striker and non-striker at the end of the over
-        setStriker(prev => {
-          const newStriker = nonStriker;
-          setNonStriker(prev);
-          addCommentary('Batsmen cross for the new over.');
-          return newStriker;
-        });
-        
-        return 0;
+        return 0; // Reset ball counter
       }
       
-      console.log(`🎯 [LiveMatch] Ball ${newBall} of over ${currentOver + 1}`);
+      console.log(`🎯 Ball ${newBall} of over ${currentOver + 1}`);
+      logMatchState(`Ball ${newBall} of over ${currentOver + 1}`);
+      console.groupEnd();
       return newBall;
     });
   };
@@ -378,6 +482,7 @@ const LiveMatch = () => {
     const batsmen = Object.entries(playerStats)
       .filter(([_, stats]) => (stats.runs > 0 || stats.balls > 0) && stats)
       .map(([name, stats]) => ({
+        id: `batsman-${name}-${stats.runs}-${stats.balls}`,
         name,
         ...stats,
         sr: stats.balls > 0 ? ((stats.runs / stats.balls) * 100).toFixed(2) : '0.00'
@@ -387,6 +492,7 @@ const LiveMatch = () => {
     const bowlers = Object.entries(bowlerStats)
       .filter(([_, stats]) => (stats.overs > 0 || stats.wickets > 0) && stats)
       .map(([name, stats]) => ({
+        id: `bowler-${name}-${stats.wickets}-${stats.runs}`,
         name,
         ...stats,
         economy: stats.overs > 0 ? (stats.runs / stats.overs).toFixed(2) : '0.00'
@@ -556,8 +662,11 @@ const LiveMatch = () => {
               <h2 className="text-lg font-semibold mb-4">Live Commentary</h2>
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {commentary.length > 0 ? (
-                  commentary.map((item) => (
-                    <div key={item.id} className="text-sm border-b border-gray-100 pb-2">
+                  commentary.map((item, index) => (
+                    <div 
+                      key={`comment-${item.id}-${index}`} 
+                      className="text-sm border-b border-gray-100 pb-2"
+                    >
                       <span className="text-gray-500 text-xs">[{item.timestamp}]</span>{' '}
                       {item.message}
                     </div>
@@ -577,7 +686,10 @@ const LiveMatch = () => {
                   {topBatsmen.length > 0 ? (
                     <div className="space-y-2">
                       {topBatsmen.map((batsman, index) => (
-                        <div key={index} className="flex justify-between text-sm">
+                        <div 
+                          key={`batsman-${batsman.name}-${index}-${batsman.runs}-${batsman.balls}`}
+                          className="flex justify-between text-sm"
+                        >
                           <span>{batsman.name}</span>
                           <span className="font-mono">{batsman.runs} ({batsman.balls}) • SR: {batsman.sr}</span>
                         </div>
@@ -592,7 +704,10 @@ const LiveMatch = () => {
                   {topBowlers.length > 0 ? (
                     <div className="space-y-2">
                       {topBowlers.map((bowler, index) => (
-                        <div key={index} className="flex justify-between text-sm">
+                        <div 
+                          key={`bowler-${bowler.name}-${index}-${bowler.wickets}-${bowler.runs}`}
+                          className="flex justify-between text-sm"
+                        >
                           <span>{bowler.name}</span>
                           <span className="font-mono">{bowler.wickets}/{bowler.runs} • {bowler.economy}</span>
                         </div>
