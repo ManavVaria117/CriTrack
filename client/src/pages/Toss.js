@@ -37,9 +37,9 @@ const Toss = () => {
       method: tossMethod
     };
     console.log(`✅ [Toss] Team ${tossWinner} chose to ${choice} first`);
-    console.log('📤 [Toss] Navigating to /match with toss data:', tossData);
+    console.log('📤 [Toss] Navigating to /live-match with toss data');
     
-    navigate('/match', {
+    navigate('/live-match', {
       state: { 
         matchDetails: {
           ...matchDetails,
