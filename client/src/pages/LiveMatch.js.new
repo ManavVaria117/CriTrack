@@ -106,24 +106,35 @@ const LiveMatch = () => {
   const addRun = (runs) => {
     if (isMatchComplete || !matchDetails) return;
     
+    // Log the run addition
+    console.log(`🏏 [LiveMatch] ${striker} scored ${runs} run${runs !== 1 ? 's' : ''}`);
+    
     // Update team score
-    setScore(prev => ({
-      ...prev,
-      runs: prev.runs + runs,
-      balls: prev.balls + 1
-    }));
+    setScore(prev => {
+      const newScore = {
+        ...prev,
+        runs: prev.runs + runs,
+        balls: prev.balls + 1
+      };
+      console.log(`📊 [LiveMatch] Score updated: ${newScore.runs}/${newScore.wickets} (${Math.floor(newScore.balls/6)}.${newScore.balls%6} overs)`);
+      return newScore;
+    });
     
     // Update batsman stats
-    setPlayerStats(prev => ({
-      ...prev,
-      [striker]: {
-        ...(prev[striker] || {}),
-        runs: (prev[striker]?.runs || 0) + runs,
-        balls: (prev[striker]?.balls || 0) + 1,
-        fours: runs === 4 ? (prev[striker]?.fours || 0) + 1 : (prev[striker]?.fours || 0),
-        sixes: runs === 6 ? (prev[striker]?.sixes || 0) + 1 : (prev[striker]?.sixes || 0)
-      }
-    }));
+    setPlayerStats(prev => {
+      const newStats = {
+        ...prev,
+        [striker]: {
+          ...(prev[striker] || {}),
+          runs: (prev[striker]?.runs || 0) + runs,
+          balls: (prev[striker]?.balls || 0) + 1,
+          fours: runs === 4 ? (prev[striker]?.fours || 0) + 1 : (prev[striker]?.fours || 0),
+          sixes: runs === 6 ? (prev[striker]?.sixes || 0) + 1 : (prev[striker]?.sixes || 0)
+        }
+      };
+      console.log(`👤 [LiveMatch] ${striker}'s stats: ${newStats[striker].runs} (${newStats[striker].balls}), ${newStats[striker].fours}x4, ${newStats[striker].sixes}x6`);
+      return newStats;
+    });
     
     // Update bowler stats
     setBowlerStats(prev => ({
@@ -144,8 +155,10 @@ const LiveMatch = () => {
       const temp = striker;
       setStriker(nonStriker);
       setNonStriker(temp);
+      console.log(`🔄 [LiveMatch] Strike rotated: ${nonStriker} is now on strike`);
       addCommentary(`${striker} takes a single, strike rotates.`);
     } else if (runs === 4) {
+      console.log(`🎯 [LiveMatch] FOUR! ${striker} hits a boundary`);
       addCommentary('FOUR! Great shot!');
     } else if (runs === 6) {
       addCommentary('SIX! What a hit!');

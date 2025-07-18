@@ -7,6 +7,7 @@ import Team from './pages/Team';
 import Match from './pages/Match';
 import Toss from './pages/Toss';
 import LiveMatch from './pages/LiveMatch';
+import MatchSummary from './pages/MatchSummary';
 
 // Add viewport meta tag for mobile responsiveness
 const addViewportMeta = () => {
@@ -32,6 +33,7 @@ function App() {
             <Route path="/match" element={<Match />} />
             <Route path="/toss" element={<Toss />} />
             <Route path="/live-match" element={<LiveMatch />} />
+            <Route path="/match-summary" element={<MatchSummary />} />
           </Routes>
         </div>
       </Router>
