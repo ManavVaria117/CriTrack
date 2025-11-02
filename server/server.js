@@ -19,18 +19,18 @@ const users = new Map();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS configuration
-const allowedOrigins = ['http://localhost:3000'];
+// CORS configuration for development
+const allowedOrigins = ['http://localhost:3000', 'http://localhost:5000'];
 
 // Middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+  if (process.env.NODE_ENV === 'development' || (origin && allowedOrigins.includes(origin))) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -46,13 +46,19 @@ app.use(cookieParser());
 const authenticateToken = (req, res, next) => {
   const token = req.cookies.token || req.headers['authorization']?.split(' ')[1];
   
-  if (!token) return res.status(401).json({ error: 'No token provided' });
+  if (!token) {
+    console.log('No token provided');
+    return res.status(401).json({ error: 'No token provided' });
+  }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid token' });
-    req.user = user;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
     next();
-  });
+  } catch (error) {
+    console.error('Invalid token:', error);
+    return res.status(403).json({ error: 'Invalid token' });
+  }
 };
 
 // Auth Routes
@@ -61,50 +67,36 @@ app.post('/api/auth/google', async (req, res) => {
     const { credential } = req.body;
     
     if (!credential) {
-      return res.status(400).json({ success: false, error: 'No credential provided' });
+      console.error('No credential provided');
+      return res.status(400).json({ error: 'No credential provided' });
     }
     
-    console.log('Received Google credential:', credential.substring(0, 20) + '...');
+    console.log('Received Google credential, verifying...');
     
-    // Verify Google token
-    let ticket;
-    try {
-      ticket = await client.verifyIdToken({
-        idToken: credential,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
-    } catch (verifyError) {
-      console.error('Google token verification failed:', verifyError);
-      return res.status(401).json({ success: false, error: 'Invalid Google token' });
-    }
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    console.log('Google payload:', payload);
     
-    const { sub, email, name, picture } = ticket.getPayload();
+    const { sub: googleId, name, email, picture } = payload;
     
-    if (!email) {
-      return res.status(400).json({ success: false, error: 'No email in token' });
-    }
-    
-    console.log('Authenticating user:', { email, name });
-    
-    // Find or create user
-    let user = users.get(sub);
-    if (!user) {
-      user = { 
-        id: sub, 
-        email, 
-        name: name || email.split('@')[0],
-        picture: picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || email.split('@')[0])}`
-      };
-      users.set(sub, user);
-      console.log('New user created:', user);
+    if (!googleId || !email) {
+      console.error('Invalid Google payload:', payload);
+      return res.status(400).json({ error: 'Invalid user data from Google' });
     }
 
-    // Create JWT token
-    const token = jwt.sign(
-      { id: user.id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: '1h' }
-    );
+    // Store or update user in memory
+    const user = { id: googleId, name, email, picture };
+    users.set(googleId, user);
+    console.log('User stored/updated:', user);
+
+    // Create JWT
+    const token = jwt.sign(user, JWT_SECRET, { expiresIn: '1h' });
+    
+    console.log('JWT token created');
 
     // Set HTTP-only cookie
     res.cookie('token', token, {
@@ -114,8 +106,8 @@ app.post('/api/auth/google', async (req, res) => {
       maxAge: 3600000, // 1 hour
       path: '/',
     });
-
-    console.log('User authenticated successfully:', { email });
+    
+    console.log('Response sent with token cookie');
     
     res.json({ 
       success: true, 

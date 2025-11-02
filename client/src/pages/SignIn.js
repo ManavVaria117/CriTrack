@@ -40,6 +40,13 @@ const SignIn = () => {
                   onSuccess={handleGoogleSuccess}
                   onError={handleGoogleError}
                   useOneTap
+                  auto_select
+                  ux_mode="popup"
+                  scope="openid profile email"
+                  prompt="select_account"
+                  cookiePolicy="single_host_origin"
+                  responseType="code"
+                  accessType="offline"
                 />
               </div>
             </GoogleOAuthProvider>
